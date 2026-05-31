@@ -1,18 +1,18 @@
 // api/check-payment.js
-// Checks Solana blockchain for payment confirmation
-// Sends Telegram notification when payment is detected
-
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = 'https://aeqhjftkaikfquafwwdm.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlcWhqZnRrYWlrZnF1YWZ3d2RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1ODMzMjMsImV4cCI6MjA5MzE1OTMyM30.jKE8LX8-uuYCWiJ6WaeAjXFU0FcWK1n7Q9X6axBId98';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-const TELEGRAM_BOT_TOKEN = '8405157983:AAEUGnnvnrPMNq6pnfvmIFpXfyxgwGvqY_M';
-const TELEGRAM_CHAT_ID = '@1519466250';
-
-// Send a Telegram message to you
 async function sendTelegram(message) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    console.error("Telegram credentials missing");
+    return;
+  }
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
     const response = await fetch(url, {
@@ -26,13 +26,11 @@ async function sendTelegram(message) {
     });
     const data = await response.json();
     if (!data.ok) console.error('Telegram error:', data);
-    return data;
   } catch (err) {
     console.error('Telegram send failed:', err);
   }
 }
 
-// Check Solana blockchain for a transaction matching our order reference
 async function checkSolanaPayment(reference) {
   try {
     const response = await fetch('https://api.mainnet-beta.solana.com', {
@@ -42,27 +40,21 @@ async function checkSolanaPayment(reference) {
         jsonrpc: '2.0',
         id: 1,
         method: 'getSignaturesForAddress',
-        params: [
-          WALLET_ADDRESS,
-          { limit: 20 }
-        ]
+        params: [WALLET_ADDRESS, { limit: 20 }]
       })
     });
-
     const data = await response.json();
     const signatures = data.result || [];
 
-    // Look for a transaction that has our order reference in the memo field
     for (const sig of signatures) {
       if (sig.memo && sig.memo.includes(reference)) {
         return { paid: true, signature: sig.signature };
       }
     }
-
     return { paid: false };
   } catch (err) {
     console.error('Solana RPC error:', err);
-    return { paid: false, error: err.message };
+    return { paid: false };
   }
 }
 
@@ -76,14 +68,13 @@ module.exports = async function handler(req, res) {
 
   try {
     const { reference } = req.query;
-
     if (!reference) {
       return res.status(400).json({ error: 'Missing reference' });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    // Check if we already confirmed this order — avoids duplicate Telegram messages
+    // Check existing order
     const { data: existingOrder } = await supabase
       .from('orders')
       .select('*')
@@ -94,11 +85,10 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ paid: true, alreadyConfirmed: true });
     }
 
-    // Check the Solana blockchain for payment
+    // Check blockchain
     const payment = await checkSolanaPayment(reference);
 
     if (payment.paid) {
-      // Mark as paid in Supabase
       await supabase
         .from('orders')
         .update({
@@ -108,23 +98,17 @@ module.exports = async function handler(req, res) {
         })
         .eq('reference', reference);
 
-      // Send Telegram notification to you with full order details
+      // Send Telegram notification
       if (existingOrder) {
-        const packageLabel = existingOrder.package_type === 'one'
-          ? '1 Lunar Cycle — $100'
-          : '2 Lunar Cycles — $200';
+        const packageLabel = existingOrder.package_type === 'one' ? '1 Lunar Cycle — $100' : '2 Lunar Cycles — $200';
+        const tokenInfo = `${existingOrder.token_amount} ${existingOrder.payment_token}`;
 
-        const tokenInfo = existingOrder.payment_token
-          ? `${existingOrder.token_amount} ${existingOrder.payment_token}`
-          : existingOrder.token_amount + ' SOL';
-
-        const message =
+        const message = 
           `🚀 <b>NEW PAID ORDER!</b>\n\n` +
           `📦 <b>Package:</b> ${packageLabel}\n` +
           `💰 <b>Paid:</b> ${tokenInfo}\n` +
           `👤 <b>Name:</b> ${existingOrder.customer_name}\n` +
-          `📍 <b>Address:</b> ${existingOrder.street}\n` +
-          `🏙️ <b>City:</b> ${existingOrder.city}, ${existingOrder.state} ${existingOrder.zip}\n` +
+          `📍 <b>Address:</b> ${existingOrder.street}, ${existingOrder.city}, ${existingOrder.state} ${existingOrder.zip}\n` +
           `🔑 <b>Order ID:</b> ${reference}\n` +
           `✅ <b>Payment confirmed on Solana!</b>`;
 
@@ -134,7 +118,6 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ paid: true, signature: payment.signature });
     }
 
-    // Payment not found yet — customer's browser will keep checking every 10 seconds
     return res.status(200).json({ paid: false });
 
   } catch (err) {
