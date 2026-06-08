@@ -45,21 +45,13 @@ body::before {
 }
 @keyframes floatBox { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
 
-/* Logo-style text matching your image */
-.hero-title {
-  font-family: 'Arial Black', Impact, system-ui, sans-serif;
-  font-size: 48px;
-  line-height: 0.92;
-  font-weight: 900;
-  letter-spacing: -1.5px;
-  color: #67e8f9;
-  text-transform: lowercase;
-  text-shadow: 
-    0 0 8px #22d3ee,
-    0 0 20px #22d3ee,
-    0 0 40px #f97316,
-    0 0 60px #f97316;
-  margin: 12px 0 6px;
+/* Restored original title style */
+h1 { 
+  font-size: 42px; 
+  line-height: 0.95; 
+  color: #38bdf8; 
+  text-shadow: 0 0 12px #0284c7; 
+  margin: 10px 0 8px; 
   text-align: center;
 }
 
@@ -135,7 +127,7 @@ body::before {
       <img src="/productbox.png" class="hero-box" alt="Melatonin Mélange">
     </div>
 
-    <h1 class="hero-title">melatonin<br>mélange</h1>
+    <h1>melatonin<br>mélange</h1>
     <div class="mg">500 mg N-ACETYL-5-METHOXYTRYPTAMINE</div>
     <div class="tagline">EXPERIMENTAL SUPPOSITORIES • FOUNDER'S BATCH</div>
 
@@ -278,7 +270,7 @@ body::before {
       const data = await res.json();
 
       if (!res.ok) {
-        debug.innerText = "Order error: " + (data.message || JSON.stringify(data));
+        debug.innerText = "Order error: " + (data.error || JSON.stringify(data));
         return;
       }
 
