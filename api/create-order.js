@@ -1,124 +1,62 @@
-// api/check-payment.js
-const { createClient } = require('@supabase/supabase-js');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-
-const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
-
-async function sendTelegram(message) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
-  try {
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'HTML'
-      })
-    });
-  } catch (err) {
-    console.error('Telegram error:', err);
-  }
-}
-
-async function checkSolanaPayment(reference) {
-  try {
-    const response = await fetch('https://api.mainnet-beta.solana.com', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getSignaturesForAddress',
-        params: [WALLET_ADDRESS, { limit: 30 }]
-      })
-    });
-    const data = await response.json();
-    const signatures = data.result || [];
-
-    for (const sig of signatures) {
-      if (sig.memo && sig.memo.includes(reference)) {
-        return { paid: true, signature: sig.signature };
-      }
-    }
-    return { paid: false };
-  } catch (err) {
-    console.error('Solana RPC error:', err);
-    return { paid: false };
-  }
-}
-
 module.exports = async function handler(req, res) {
+  // IMPORTANT: Allow CORS and POST
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   try {
-    const { reference } = req.query;
-    if (!reference) return res.status(400).json({ error: 'Missing reference' });
+    const { packageType, paymentToken, address, price } = req.body;
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    if (!packageType || !paymentToken || !address) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
 
-    // Check if already paid
-    const { data: existingOrder } = await supabase
+    const reference = 'MEL-' + Date.now().toString(36) + Math.random().toString(36).substr(2);
+
+    // Save to Supabase
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    
+    const { data, error } = await supabase
       .from('orders')
-      .select('*')
-      .eq('reference', reference)
+      .insert({
+        reference,
+        package_type: packageType,
+        payment_token: paymentToken,
+        token_amount: price || 188,
+        customer_name: address.name,
+        street: address.address,
+        city: address.city,
+        state: address.state,
+        zip: address.zip,
+        status: 'pending'
+      })
+      .select()
       .single();
 
-    if (existingOrder && existingOrder.status === 'paid') {
-      return res.status(200).json({ paid: true });
-    }
+    if (error) throw error;
 
-    // Check blockchain
-    const payment = await checkSolanaPayment(reference);
+    // Generate Solana pay URL (adjust this to match your Phantom flow)
+    const payUrl = `solana:${WALLET_ADDRESS}?amount=${price || 188}&reference=${reference}`;
 
-    if (payment.paid) {
-      // Update order status
-      await supabase
-        .from('orders')
-        .update({
-          status: 'paid',
-          paid_at: new Date().toISOString(),
-          tx_signature: payment.signature
-        })
-        .eq('reference', reference);
+    await sendTelegram(`🛒 New Order!\nReference: ${reference}\nPackage: ${packageType}\nAmount: $${price || 188}`);
 
-      // Detailed Paid Alert
-      if (existingOrder) {
-        const packageName = existingOrder.package_type === 'one' 
-          ? '1 Lunar Cycle — $100' 
-          : '2 Lunar Cycles — $200';
-
-        const message = 
-          `✅ <b>PAYMENT RECEIVED!</b>\n\n` +
-          `📦 <b>Package:</b> ${packageName}\n` +
-          `💰 <b>Amount:</b> ${existingOrder.token_amount} ${existingOrder.payment_token}\n` +
-          `👤 <b>Name:</b> ${existingOrder.customer_name}\n` +
-          `📍 <b>Address:</b> ${existingOrder.street}\n` +
-          `🏙️ <b>Location:</b> ${existingOrder.city}, ${existingOrder.state} ${existingOrder.zip}\n` +
-          `🔑 <b>Order ID:</b> <code>${reference}</code>\n` +
-          `🔗 <b>Tx Signature:</b> <code>${payment.signature}</code>\n\n` +
-          `🚀 Order is ready for shipping!`;
-
-        await sendTelegram(message);
-      }
-
-      return res.status(200).json({ paid: true, signature: payment.signature });
-    }
-
-    return res.status(200).json({ paid: false });
+    res.status(200).json({
+      success: true,
+      reference,
+      displayAmount: `$${price || 188} SOL`,
+      payUrl
+    });
 
   } catch (err) {
-    console.error('Check payment error:', err);
-    return res.status(500).json({ error: 'Server error' });
+    console.error('Create order error:', err);
+    res.status(500).json({ error: err.message });
   }
 };
