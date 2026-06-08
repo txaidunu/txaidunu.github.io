@@ -28,16 +28,12 @@ async function getSolPrice() {
     const data = await res.json();
     return data.data.SOL.price;
   } catch (err) {
-    console.error('Jupiter price error:', err);
     return 150;
   }
 }
 
 async function sendTelegram(message) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    console.error("Telegram credentials missing in environment variables");
-    return;
-  }
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
     await fetch(url, {
@@ -49,9 +45,7 @@ async function sendTelegram(message) {
         parse_mode: 'HTML'
       })
     });
-  } catch (err) {
-    console.error('Telegram send failed:', err);
-  }
+  } catch (err) {}
 }
 
 module.exports = async function handler(req, res) {
@@ -92,10 +86,45 @@ module.exports = async function handler(req, res) {
       payUrl = `solana:${WALLET_ADDRESS}?spl-token=${mint}&amount=${tokenAmount}&label=Melatonin%20Melange&memo=${encodeURIComponent(reference)}`;
     }
 
-    // Save order
+    // Save to Supabase
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const { error: supabaseError } = await supabase.from('orders').insert([{
+    await supabase.from('orders').insert([{
       reference,
       package_type: packageType,
       usd_amount: usdAmount,
-      token_amount: tokenAmount
+      token_amount: tokenAmount,
+      payment_token: paymentToken,
+      customer_name: address.name,
+      street: address.address,
+      city: address.city,
+      state: address.state,
+      zip: address.zip,
+      status: 'pending'
+    }]);
+
+    // Detailed Telegram Message
+    const message = 
+      `🛎️ <b>NEW ORDER RECEIVED!</b>\n\n` +
+      `📦 <b>Package:</b> ${packageType === 'one' ? '1 Lunar Cycle — $100' : '2 Lunar Cycles — $200'}\n` +
+      `💰 <b>Amount:</b> ${displayAmount}\n` +
+      `👤 <b>Name:</b> ${address.name}\n` +
+      `📍 <b>Address:</b> ${address.address}\n` +
+      `🏙️ <b>City/State/ZIP:</b> ${address.city}, ${address.state} ${address.zip}\n` +
+      `🔑 <b>Order ID:</b> <code>${reference}</code>\n` +
+      `⏳ <b>Status:</b> Waiting for payment\n\n` +
+      `💸 Pay with: ${paymentToken}`;
+
+    await sendTelegram(message);
+
+    return res.status(200).json({
+      success: true,
+      reference,
+      displayAmount,
+      payUrl
+    });
+
+  } catch (err) {
+    console.error('Create order error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
