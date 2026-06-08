@@ -1,4 +1,3 @@
-\// api/create-order.js
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -14,15 +13,9 @@ async function sendTelegram(message) {
     await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'HTML'
-      })
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: 'HTML' })
     });
-  } catch (err) {
-    console.error('Telegram error:', err);
-  }
+  } catch (e) {}
 }
 
 module.exports = async function handler(req, res) {
@@ -30,18 +23,13 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
     const { packageType, paymentToken, address, price = 188 } = req.body || {};
 
-    if (!packageType || !paymentToken || !address || !address.name) {
+    if (!packageType || !paymentToken || !address?.name) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -49,30 +37,22 @@ module.exports = async function handler(req, res) {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { error } = await supabase
-      .from('orders')
-      .insert({
-        reference,
-        package_type: packageType,
-        payment_token: paymentToken,
-        token_amount: price,
-        customer_name: address.name,
-        street: address.address,
-        city: address.city,
-        state: address.state,
-        zip: address.zip,
-        status: 'pending'
-      });
+    const { error } = await supabase.from('orders').insert({
+      reference,
+      package_type: packageType,
+      payment_token: paymentToken,
+      token_amount: price,
+      customer_name: address.name,
+      street: address.address,
+      city: address.city,
+      state: address.state,
+      zip: address.zip,
+      status: 'pending'
+    });
 
     if (error) throw error;
 
-    await sendTelegram(
-      `🛒 <b>New Order Received!</b>\n\n` +
-      `🔑 Reference: <code>${reference}</code>\n` +
-      `📦 Package: ${packageType}\n` +
-      `💰 $${price}\n` +
-      `👤 ${address.name}`
-    );
+    await sendTelegram(`🛒 New Order - ${reference} - $${price}`);
 
     const payUrl = `solana:${WALLET_ADDRESS}?amount=${price}&reference=${reference}`;
 
@@ -84,9 +64,6 @@ module.exports = async function handler(req, res) {
 
   } catch (err) {
     console.error('Create order error:', err);
-    res.status(500).json({ 
-      error: err.message || 'Internal server error',
-      details: err.toString()
-    });
+    res.status(500).json({ error: err.message || 'Server error' });
   }
 };
