@@ -1,4 +1,4 @@
-// api/create-order.js
+\// api/create-order.js
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -27,24 +27,29 @@ async function sendTelegram(message) {
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   try {
-    const { packageType, paymentToken, address, price = 188 } = req.body;
+    const { packageType, paymentToken, address, price = 188 } = req.body || {};
 
-    if (!packageType || !paymentToken || !address) {
+    if (!packageType || !paymentToken || !address || !address.name) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const reference = 'MEL-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    const reference = 'MEL-' + Math.random().toString(36).substring(2, 15).toUpperCase();
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('orders')
       .insert({
         reference,
@@ -57,25 +62,31 @@ module.exports = async function handler(req, res) {
         state: address.state,
         zip: address.zip,
         status: 'pending'
-      })
-      .select()
-      .single();
+      });
 
     if (error) throw error;
 
-    // Send Telegram notification
     await sendTelegram(
-      `🛒 <b>New Order!</b>\n\n` +
+      `🛒 <b>New Order Received!</b>\n\n` +
+      `🔑 Reference: <code>${reference}</code>\n` +
       `📦 Package: ${packageType}\n` +
-      `💰 Amount: $${price}\n` +
-      `👤 Name: ${address.name}\n` +
-      `📍 Address: ${address.address}, ${address.city}, ${address.state} ${address.zip}\n` +
-      `🔑 Reference: <code>${reference}</code>`
+      `💰 $${price}\n` +
+      `👤 ${address.name}`
     );
 
-    // Solana Pay URL
     const payUrl = `solana:${WALLET_ADDRESS}?amount=${price}&reference=${reference}`;
 
     res.status(200).json({
       reference,
-      displayAmount: `$${price
+      displayAmount: `$${price}`,
+      payUrl
+    });
+
+  } catch (err) {
+    console.error('Create order error:', err);
+    res.status(500).json({ 
+      error: err.message || 'Internal server error',
+      details: err.toString()
+    });
+  }
+};
