@@ -18,18 +18,20 @@ body {
   padding: 22px;
   overflow-x: hidden;
 }
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background: radial-gradient(circle at 50% 35%, rgba(56,189,248,0.25), transparent 30%),
-              radial-gradient(circle at 50% 80%, rgba(249,115,22,0.32), transparent 45%);
-  pointer-events: none;
-  animation: shimmer 8s ease-in-out infinite;
-}
-@keyframes shimmer { 0%,100% { opacity: 0.6; } 50% { opacity: 0.95; } }
 
+/* Desktop */
 .wrap { max-width: 560px; margin: auto; position: relative; z-index: 2; }
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+  body { padding: 16px; }
+  .wrap { max-width: 100%; }
+  h1 { font-size: 36px; }
+  .marketing-copy, .science-text { font-size: 14.5px; line-height: 1.6; padding: 18px 20px; }
+  .science-section { margin: 32px 0 16px; }
+}
+
+/* Rest of styles */
 .card {
   border-radius: 28px;
   padding: 28px;
@@ -71,7 +73,7 @@ h1 {
   letter-spacing: 1px;
 }
 
-.marketing-copy {
+.marketing-copy, .science-text {
   font-size: 15.8px;
   line-height: 1.68;
   color: #e0f2fe;
@@ -107,18 +109,6 @@ h1 {
   max-width: 220px;
   margin: 24px auto 12px;
   display: block;
-}
-
-.science-text {
-  font-size: 15.8px;
-  line-height: 1.68;
-  color: #67e8f9;
-  background: rgba(15, 23, 42, 0.65);
-  border-left: 5px solid #fb923c;
-  padding: 22px 26px;
-  border-radius: 12px;
-  margin: 20px 0;
-  text-align: left;
 }
 
 .package, .token-btn {
@@ -256,6 +246,7 @@ h1 {
 </div>
 
 <script>
+  // Your existing script (unchanged)
   let selectedPackage = null;
   let selectedToken = null;
 
