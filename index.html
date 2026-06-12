@@ -164,7 +164,7 @@ h1 {
       <button class="continue" onclick="showDisclaimerModal()">Continue to Payment</button>
     </div>
 
-    <!-- SCIENCE SECTION -->
+    <!-- Science Section -->
     <div class="science-section">
       <h2>Science</h2>
       <img src="worms-flies-results.png" class="result-image" alt="Lifespan Extension Results">
@@ -181,7 +181,7 @@ h1 {
 
     <div id="payment" style="display:none;">
       <h3 id="amount"></h3>
-      <a id="paylink" class="continue" style="display:block; text-align:center; text-decoration:none;">Copy Wallet Address</a>
+      <a id="paylink" class="continue" style="display:block; text-align:center; text-decoration:none;">Open in Phantom</a>
       <img id="qr" style="width:260px; max-width:100%; margin:22px auto; display:block; background:white; padding:12px; border-radius:18px;">
       <p id="status" style="text-align:center;">Waiting for payment...</p>
     </div>
@@ -277,22 +277,10 @@ h1 {
 
       debug.innerText = "Order created successfully!";
 
-      document.getElementById("amount").innerHTML = `
-        <strong>Send $${188} ${selectedToken}</strong><br><br>
-        Wallet Address:<br>
-        <code style="word-break: break-all; font-size: 13px;">${WALLET_ADDRESS}</code><br><br>
-        Reference: <strong>${data.reference}</strong>
-      `;
-
-      const paylink = document.getElementById("paylink");
-      paylink.innerText = "Copy Wallet Address";
-      paylink.onclick = () => {
-        navigator.clipboard.writeText(WALLET_ADDRESS).then(() => {
-          alert("Wallet address copied to clipboard!");
-        });
-      };
-
-      document.getElementById("qr").src = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=" + encodeURIComponent(WALLET_ADDRESS);
+      document.getElementById("amount").innerHTML = `Send <strong>${data.displayAmount}</strong>`;
+      document.getElementById("paylink").href = data.payUrl || "#";
+      document.getElementById("paylink").innerText = "Open in Phantom Wallet";
+      document.getElementById("qr").src = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=" + encodeURIComponent(data.payUrl || WALLET_ADDRESS);
       document.getElementById("payment").style.display = "block";
 
       checkPayment(data.reference);
