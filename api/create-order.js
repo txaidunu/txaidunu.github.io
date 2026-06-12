@@ -1,113 +1,67 @@
-<script>
-  let selectedPackage = null;
-  let selectedToken = null;
-  const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
+const { createClient } = require('@supabase/supabase-js');
 
-  function selectPackage(btn) {
-    selectedPackage = 'one';
-    document.querySelectorAll('.package').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    document.getElementById("form").style.display = "block";
-  }
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
 
-  function selectToken(token, btn) {
-    selectedToken = token;
-    document.querySelectorAll('.token-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-  }
+async function sendTelegram(message) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+  try {
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: 'HTML' })
+    });
+  } catch (e) {}
+}
 
-  function showDisclaimerModal() {
-    const debug = document.getElementById("debug");
-    debug.innerText = "";
+module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    if (!selectedPackage) return debug.innerText = "Please select a package.";
-    if (!selectedToken) return debug.innerText = "Please select a payment token.";
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    document.getElementById("disclaimerModal").style.display = "flex";
-  }
+  try {
+    const { packageType, paymentToken, address, price = 188 } = req.body || {};
 
-  function acceptDisclaimer() {
-    document.getElementById("disclaimerModal").style.display = "none";
-    createOrder();
-  }
-
-  async function createOrder() {
-    const debug = document.getElementById("debug");
-    debug.innerText = "";
-
-    const name = document.getElementById("name").value.trim();
-    const address = document.getElementById("address").value.trim();
-    const city = document.getElementById("city").value.trim();
-    const state = document.getElementById("state").value.trim();
-    const zip = document.getElementById("zip").value.trim();
-
-    if (!name || !address || !city || !state || !zip) {
-      return debug.innerText = "Please fill all shipping fields.";
+    if (!packageType || !paymentToken || !address?.name) {
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    try {
-      debug.innerText = "Creating order...";
-      
-      const res = await fetch("/api/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          packageType: selectedPackage,
-          paymentToken: selectedToken,
-          address: { name, address, city, state, zip },
-          price: 188
-        })
-      });
+    const reference = 'MEL-' + Math.random().toString(36).substring(2, 15).toUpperCase();
 
-      const data = await res.json();
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-      if (!res.ok) {
-        debug.innerText = "Order error: " + (data.error || JSON.stringify(data));
-        return;
-      }
+    const { error } = await supabase.from('orders').insert({
+      reference,
+      package_type: packageType,
+      payment_token: paymentToken,
+      token_amount: price,
+      customer_name: address.name,
+      street: address.address,
+      city: address.city,
+      state: address.state,
+      zip: address.zip,
+      status: 'pending'
+    });
 
-      debug.innerText = "Order created!";
+    if (error) throw error;
 
-      // Simple, clear payment instructions
-      document.getElementById("amount").innerHTML = `
-        <strong>Send $${188} ${selectedToken}</strong><br><br>
-        To: <code style="word-break:break-all;">${WALLET_ADDRESS}</code><br><br>
-        Reference: <strong>${data.reference}</strong>
-      `;
+    await sendTelegram(`New Order ${reference} - $${price} ${paymentToken}`);
 
-      document.getElementById("paylink").href = "#";
-      document.getElementById("paylink").innerText = "Copy Wallet Address";
-      document.getElementById("paylink").onclick = () => {
-        navigator.clipboard.writeText(WALLET_ADDRESS);
-        alert("Wallet address copied!");
-      };
+    res.status(200).json({
+      reference,
+      displayAmount: `$${price} ${paymentToken}`,
+      payUrl: WALLET_ADDRESS
+    });
 
-      document.getElementById("qr").src = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=" + encodeURIComponent(WALLET_ADDRESS);
-      document.getElementById("payment").style.display = "block";
-
-      checkPayment(data.reference);
-    } catch (err) {
-      debug.innerText = "Checkout error: " + err.message;
-    }
+  } catch (err) {
+    console.error('Create order error:', err);
+    res.status(500).json({ error: err.message || 'Server error' });
   }
-
-  function checkPayment(ref) {
-    // Keep your existing checkPayment function
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const r = await fetch(`/api/check-payment?reference=${encodeURIComponent(ref)}`);
-        const d = await r.json();
-        if (d.paid) {
-          document.getElementById("status").innerHTML = "✅ <strong>Payment confirmed!</strong><br>We'll ship your order soon.";
-          clearInterval(interval);
-        } else {
-          document.getElementById("status").innerText = `Waiting for payment... (${attempts})`;
-        }
-      } catch (e) {
-        document.getElementById("status").innerText = "Checking network...";
-      }
-    }, 10000);
-  }
-</script>
+};
