@@ -278,7 +278,7 @@ h1 {
       debug.innerText = "Order created successfully!";
 
       document.getElementById("amount").innerHTML = `Send <strong>${data.displayAmount}</strong>`;
-      
+
       const paylink = document.getElementById("paylink");
       paylink.href = data.payUrl;
       paylink.innerText = "Open in Phantom Wallet";
