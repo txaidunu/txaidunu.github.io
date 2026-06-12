@@ -1,3 +1,4 @@
+// api/create-order.js
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -13,7 +14,11 @@ async function sendTelegram(message) {
     await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: 'HTML' })
+      body: JSON.stringify({ 
+        chat_id: TELEGRAM_CHAT_ID, 
+        text: message, 
+        parse_mode: 'HTML' 
+      })
     });
   } catch (e) {}
 }
@@ -35,6 +40,21 @@ module.exports = async function handler(req, res) {
 
     const reference = 'MEL-' + Math.random().toString(36).substring(2, 15).toUpperCase();
 
+    let payUrl = '';
+    let displayAmount = '';
+
+    if (paymentToken === 'SOL') {
+      const SOL_PRICE = 155; // Update this when SOL price changes significantly
+      const solAmount = (price / SOL_PRICE).toFixed(4);
+      payUrl = `solana:${WALLET_ADDRESS}?amount=${solAmount}&reference=${reference}`;
+      displayAmount = `${solAmount} SOL ($${price})`;
+    } 
+    else if (paymentToken === 'USDC' || paymentToken === 'USDT') {
+      // For stablecoins, send exact $188 worth
+      payUrl = `solana:${WALLET_ADDRESS}?amount=${price}&spl-token=${paymentToken === 'USDC' ? 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' : 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'}&reference=${reference}`;
+      displayAmount = `$${price} ${paymentToken}`;
+    }
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const { error } = await supabase.from('orders').insert({
@@ -52,13 +72,11 @@ module.exports = async function handler(req, res) {
 
     if (error) throw error;
 
-    await sendTelegram(`🛒 New Order - ${reference} - $${price}`);
-
-    const payUrl = `solana:${WALLET_ADDRESS}?amount=${price}&reference=${reference}`;
+    await sendTelegram(`🛒 New Order - ${reference} - ${displayAmount}`);
 
     res.status(200).json({
       reference,
-      displayAmount: `$${price}`,
+      displayAmount,
       payUrl
     });
 
