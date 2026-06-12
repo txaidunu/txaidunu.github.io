@@ -181,7 +181,7 @@ h1 {
 
     <div id="payment" style="display:none;">
       <h3 id="amount"></h3>
-      <a id="paylink" target="_blank" class="continue" style="display:block; text-align:center; text-decoration:none;">Open Wallet</a>
+      <a id="paylink" class="continue" style="display:block; text-align:center; text-decoration:none;">Copy Wallet Address</a>
       <img id="qr" style="width:260px; max-width:100%; margin:22px auto; display:block; background:white; padding:12px; border-radius:18px;">
       <p id="status" style="text-align:center;">Waiting for payment...</p>
     </div>
@@ -210,6 +210,7 @@ h1 {
 <script>
   let selectedPackage = null;
   let selectedToken = null;
+  const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
 
   function selectPackage(btn) {
     selectedPackage = 'one';
@@ -275,9 +276,23 @@ h1 {
       }
 
       debug.innerText = "Order created successfully!";
-      document.getElementById("amount").innerText = "Send " + data.displayAmount;
-      document.getElementById("paylink").href = data.payUrl;
-      document.getElementById("qr").src = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=" + encodeURIComponent(data.payUrl);
+
+      document.getElementById("amount").innerHTML = `
+        <strong>Send $${188} ${selectedToken}</strong><br><br>
+        Wallet Address:<br>
+        <code style="word-break: break-all; font-size: 13px;">${WALLET_ADDRESS}</code><br><br>
+        Reference: <strong>${data.reference}</strong>
+      `;
+
+      const paylink = document.getElementById("paylink");
+      paylink.innerText = "Copy Wallet Address";
+      paylink.onclick = () => {
+        navigator.clipboard.writeText(WALLET_ADDRESS).then(() => {
+          alert("Wallet address copied to clipboard!");
+        });
+      };
+
+      document.getElementById("qr").src = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=" + encodeURIComponent(WALLET_ADDRESS);
       document.getElementById("payment").style.display = "block";
 
       checkPayment(data.reference);
