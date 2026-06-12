@@ -181,7 +181,7 @@ h1 {
 
     <div id="payment" style="display:none;">
       <h3 id="amount"></h3>
-      <a id="paylink" class="continue" style="display:block; text-align:center; text-decoration:none;">Open in Phantom</a>
+      <a id="paylink" class="continue" style="display:block; text-align:center; text-decoration:none;">Open in Phantom Wallet</a>
       <img id="qr" style="width:260px; max-width:100%; margin:22px auto; display:block; background:white; padding:12px; border-radius:18px;">
       <p id="status" style="text-align:center;">Waiting for payment...</p>
     </div>
@@ -278,9 +278,12 @@ h1 {
       debug.innerText = "Order created successfully!";
 
       document.getElementById("amount").innerHTML = `Send <strong>${data.displayAmount}</strong>`;
-      document.getElementById("paylink").href = data.payUrl || "#";
-      document.getElementById("paylink").innerText = "Open in Phantom Wallet";
-      document.getElementById("qr").src = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=" + encodeURIComponent(data.payUrl || WALLET_ADDRESS);
+      
+      const paylink = document.getElementById("paylink");
+      paylink.href = data.payUrl;
+      paylink.innerText = "Open in Phantom Wallet";
+
+      document.getElementById("qr").src = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=" + encodeURIComponent(data.payUrl);
       document.getElementById("payment").style.display = "block";
 
       checkPayment(data.reference);
