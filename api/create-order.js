@@ -44,15 +44,18 @@ module.exports = async function handler(req, res) {
     let displayAmount = '';
 
     if (paymentToken === 'SOL') {
-      const SOL_PRICE = 155; // Update this when SOL price changes significantly
+      const SOL_PRICE = 155;
       const solAmount = (price / SOL_PRICE).toFixed(4);
       payUrl = `solana:${WALLET_ADDRESS}?amount=${solAmount}&reference=${reference}`;
       displayAmount = `${solAmount} SOL ($${price})`;
     } 
-    else if (paymentToken === 'USDC' || paymentToken === 'USDT') {
-      // For stablecoins, send exact $188 worth
-      payUrl = `solana:${WALLET_ADDRESS}?amount=${price}&spl-token=${paymentToken === 'USDC' ? 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' : 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'}&reference=${reference}`;
-      displayAmount = `$${price} ${paymentToken}`;
+    else if (paymentToken === 'USDC') {
+      payUrl = `solana:${WALLET_ADDRESS}?amount=${price}&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&reference=${reference}`;
+      displayAmount = `$${price} USDC`;
+    } 
+    else if (paymentToken === 'USDT') {
+      payUrl = `solana:${WALLET_ADDRESS}?amount=${price}&spl-token=Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB&reference=${reference}`;
+      displayAmount = `$${price} USDT`;
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
