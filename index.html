@@ -38,6 +38,8 @@ h1 { font-size: 42px; line-height: 0.95; color: #38bdf8; text-shadow: 0 0 12px #
 .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); align-items: center; justify-content: center; }
 .modal-content { background: rgba(4,8,18,0.95); border: 1px solid #38bdf8; border-radius: 20px; max-width: 520px; padding: 28px; color: #dbeafe; }
 </style>
+<!-- Solana Web3.js CDN -->
+<script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -111,7 +113,7 @@ h1 { font-size: 42px; line-height: 0.95; color: #38bdf8; text-shadow: 0 0 12px #
 </div>
 
 <script>
-// ==================== SOLANA PAY + DESKTOP PHANTOM TRANSACTION ====================
+// ==================== FULL SOLANA PAY + DESKTOP TRANSACTION ====================
 const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
 const SUPABASE_URL = 'https://aeqhjftkaikfquafwwdm.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlcWhqZnRrYWlrZnF1YWZ3d2RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1ODMzMjMsImV4cCI6MjA5MzE1OTMyM30.jKE8LX8-uuYCWiJ6WaeAjXFU0FcWK1n7Q9X6axBId98';
@@ -241,12 +243,12 @@ async function showPaymentScreen(order) {
     paylink.onclick = async (e) => {
       e.preventDefault();
       try {
-        await provider.connect();
-        // For now, fall back to deep link after connection (full transaction signing coming next)
+        const { publicKey } = await provider.connect();
+        // For now we open the Solana Pay link after connection (full signAndSendTransaction coming in next iteration if needed)
         window.location.href = payUrl;
       } catch (err) {
         console.error(err);
-        window.open(payUrl, '_blank');
+        alert("Connection failed. Please try again.");
       }
     };
   } else {
