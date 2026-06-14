@@ -4,7 +4,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Melatonin Mélange</title>
 <style>
-/* Your existing styles - unchanged */
 * { box-sizing: border-box; }
 body {
   margin: 0; min-height: 100vh; color: #dbeafe; font-family: Arial, sans-serif;
@@ -18,13 +17,49 @@ body {
   backdrop-filter: blur(14px); border: 1px solid rgba(56,189,248,0.45);
   box-shadow: 0 0 50px rgba(56,189,248,0.25), 0 0 100px rgba(249,115,22,0.18);
 }
-/* ... keep all your other styles (hero-box, h1, etc.) exactly as they were ... */
+.hero-box-wrap { display: flex; justify-content: center; margin-bottom: 20px; }
+.hero-box {
+  width: 100%; max-width: 440px; border-radius: 20px;
+  filter: drop-shadow(0 0 20px rgba(56,189,248,0.8)) drop-shadow(0 0 50px rgba(249,115,22,0.5));
+  animation: floatBox 6s ease-in-out infinite;
+}
+@keyframes floatBox { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+h1 { font-size: 42px; line-height: 0.95; color: #38bdf8; text-shadow: 0 0 12px #0284c7; margin: 10px 0 8px; text-align: center; }
+.mg { color: #67e8f9; letter-spacing: 5px; font-size: 15px; text-align: center; }
+.tagline { color: #fb923c; font-size: 14px; margin-top: 8px; text-align: center; }
+.marketing-copy {
+  font-size: 15.5px; line-height: 1.65; color: #e0f2fe;
+  background: rgba(15, 23, 42, 0.65); border-left: 5px solid #fb923c;
+  padding: 22px 26px; border-radius: 12px; margin: 28px 0;
+}
+.package, .token-btn {
+  width: 100%; padding: 16px; margin: 8px 0; border-radius: 16px;
+  border: 1px solid rgba(56,189,248,0.55); background: rgba(2,6,23,0.86);
+  color: #e0f2fe; font-size: 16px; cursor: pointer; transition: all 0.2s;
+}
+.package:hover, .package.selected, .token-btn.selected {
+  background: rgba(12,74,110,0.7); border-color: #38bdf8;
+}
+.token-row { display: flex; gap: 10px; margin: 8px 0; }
+.token-btn { flex: 1; text-align: center; }
+.continue {
+  width: 100%; padding: 16px; margin-top: 16px; border: none;
+  background: linear-gradient(90deg, #0284c7, #38bdf8);
+  color: #020617; font-weight: bold; font-size: 16px; cursor: pointer; border-radius: 16px;
+}
+#debug { color: #fb923c; white-space: pre-wrap; font-size: 14px; margin: 12px 0; }
+.disclaimer { margin-top: 32px; font-size: 11.5px; line-height: 1.5; color: rgba(219,234,254,0.75); text-align: center; }
+.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.95); align-items: center; justify-content: center; }
+.modal-content {
+  background: rgba(4,8,18,0.95); border: 1px solid #38bdf8; border-radius: 20px;
+  max-width: 520px; padding: 28px; color: #dbeafe;
+}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="card">
-    <!-- Your existing HTML content stays exactly the same until the script -->
     <div class="hero-box-wrap">
       <img src="/productbox.png" class="hero-box" alt="Melatonin Mélange">
     </div>
@@ -70,11 +105,15 @@ body {
       <p id="status" style="text-align:center;">Waiting for payment...</p>
     </div>
 
-    <p id="debug" style="color:#fb923c; white-space:pre-wrap; font-size:14px; margin:12px 0;"></p>
+    <p id="debug"></p>
+
+    <div class="disclaimer">
+      Experimental product. For research/investigational use only. Not intended for human consumption.
+    </div>
   </div>
 </div>
 
-<!-- Disclaimer Modal (unchanged) -->
+<!-- Disclaimer Modal -->
 <div id="disclaimerModal" class="modal">
   <div class="modal-content">
     <h2 style="color:#fb923c;">Before You Proceed</h2>
@@ -90,7 +129,7 @@ body {
 </div>
 
 <script>
-// ==================== PAYMENT SYSTEM ====================
+// ==================== SOLANA PAY INTEGRATION ====================
 const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
 const SUPABASE_URL = 'https://aeqhjftkaikfquafwwdm.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlcWhqZnRrYWlrZnF1YWZ3d2RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1ODMzMjMsImV4cCI6MjA5MzE1OTMyM30.jKE8LX8-uuYCWiJ6WaeAjXFU0FcWK1n7Q9X6axBId98';
@@ -102,6 +141,19 @@ const TOKEN_MINTS = {
   USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
   USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
 };
+
+async function getTokenAmount(token) {
+  if (token === 'USDC' || token === 'USDT') return 188;
+
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+    const data = await res.json();
+    const solPrice = data.solana?.usd || 150;
+    return (188 / solPrice).toFixed(6);
+  } catch (e) {
+    return (188 / 150).toFixed(6);
+  }
+}
 
 function selectPackage(btn) {
   document.querySelectorAll('.package').forEach(b => b.classList.remove('selected'));
@@ -165,15 +217,10 @@ async function createOrder() {
     });
 
     const data = await res.json();
+    if (!res.ok || !data || !data[0]) throw new Error("Failed to create order");
 
-    if (!res.ok || !data || !data[0]) {
-      throw new Error(data.error || "Failed to create order");
-    }
-
-    const order = data[0];
     debug.innerText = "Order created! Preparing payment...";
-    await showPaymentScreen(order);
-
+    await showPaymentScreen(data[0]);
   } catch (err) {
     debug.innerText = "Error: " + err.message;
     console.error(err);
@@ -181,17 +228,18 @@ async function createOrder() {
 }
 
 async function showPaymentScreen(order) {
+  const tokenAmount = await getTokenAmount(selectedToken);
   let payUrl = "";
 
   if (selectedToken === "SOL") {
-    payUrl = `solana:${WALLET_ADDRESS}?amount=188&label=Melatonin%20M%C3%A9lange&message=Order_${order.id}`;
+    payUrl = `solana:${WALLET_ADDRESS}?amount=${tokenAmount}&label=Melatonin%20M%C3%A9lange&message=Order_${order.id}`;
   } else {
     const mint = TOKEN_MINTS[selectedToken];
-    payUrl = `solana:${WALLET_ADDRESS}?amount=188&spl-token=${mint}&label=Melatonin%20M%C3%A9lange&message=Order_${order.id}`;
+    payUrl = `solana:${WALLET_ADDRESS}?amount=${tokenAmount}&spl-token=${mint}&label=Melatonin%20M%C3%A9lange&message=Order_${order.id}`;
   }
 
-  document.getElementById("amount").innerHTML = `Send exactly <strong>$188 ${selectedToken}</strong>`;
-  
+  document.getElementById("amount").innerHTML = `Send exactly <strong>${tokenAmount} ${selectedToken}</strong> (≈ $188)`;
+
   const paylink = document.getElementById("paylink");
   paylink.href = payUrl;
   paylink.innerText = "Open in Phantom Wallet";
@@ -208,22 +256,16 @@ function pollForPayment(orderId) {
     attempts++;
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${orderId}&select=status`, {
-        headers: {
-          "apikey": SUPABASE_ANON_KEY,
-          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-        }
+        headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` }
       });
       const data = await res.json();
-
       if (data && data[0] && data[0].status === "paid") {
         document.getElementById("status").innerHTML = `✅ <strong>Payment Confirmed!</strong><br>Thank you. Your order will ship soon.`;
         clearInterval(interval);
       } else {
         document.getElementById("status").innerText = `Waiting for payment... (${attempts})`;
       }
-    } catch (e) {
-      console.log("Polling error");
-    }
+    } catch (e) {}
   }, 8000);
 }
 </script>
