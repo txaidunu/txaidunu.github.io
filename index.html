@@ -82,7 +82,7 @@ h1 { font-size: 42px; line-height: 0.95; color: #38bdf8; text-shadow: 0 0 12px #
 
     <div id="payment" style="display:none; margin-top:20px;">
       <h3 id="amount"></h3>
-      <a id="paylink" class="continue" style="display:block; text-align:center; text-decoration:none; margin-bottom:12px;">Open in Phantom Wallet</a>
+      <a id="paylink" class="continue" style="display:block; text-align:center; text-decoration:none; margin-bottom:12px;">Pay with Phantom</a>
       <img id="qr" style="width:260px; max-width:100%; margin:22px auto; display:block; background:white; padding:12px; border-radius:18px;">
       <p id="status" style="text-align:center;">Waiting for payment...</p>
     </div>
@@ -111,7 +111,7 @@ h1 { font-size: 42px; line-height: 0.95; color: #38bdf8; text-shadow: 0 0 12px #
 </div>
 
 <script>
-// ==================== IMPROVED SOLANA PAY + PHANTOM DETECTION ====================
+// ==================== SOLANA PAY + DESKTOP PHANTOM TRANSACTION ====================
 const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
 const SUPABASE_URL = 'https://aeqhjftkaikfquafwwdm.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlcWhqZnRrYWlrZnF1YWZ3d2RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1ODMzMjMsImV4cCI6MjA5MzE1OTMyM30.jKE8LX8-uuYCWiJ6WaeAjXFU0FcWK1n7Q9X6axBId98';
@@ -141,9 +141,7 @@ function getPhantomProvider() {
     const provider = window.phantom?.solana;
     if (provider?.isPhantom) return provider;
   }
-  if (window.solana?.isPhantom) {
-    return window.solana;
-  }
+  if (window.solana?.isPhantom) return window.solana;
   return null;
 }
 
@@ -221,6 +219,8 @@ async function createOrder() {
 
 async function showPaymentScreen(order) {
   const tokenAmount = await getTokenAmount(selectedToken);
+  const provider = getPhantomProvider();
+
   let payUrl = "";
 
   if (selectedToken === "SOL") {
@@ -233,7 +233,8 @@ async function showPaymentScreen(order) {
   document.getElementById("amount").innerHTML = `Send exactly <strong>${tokenAmount} ${selectedToken}</strong> (≈ $188)`;
 
   const paylink = document.getElementById("paylink");
-  const provider = getPhantomProvider();
+  document.getElementById("qr").src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(payUrl)}`;
+  document.getElementById("payment").style.display = "block";
 
   if (provider) {
     paylink.innerText = "Pay with Phantom Extension";
@@ -241,8 +242,10 @@ async function showPaymentScreen(order) {
       e.preventDefault();
       try {
         await provider.connect();
-        window.location.href = payUrl;   // fallback to deep link after connect
+        // For now, fall back to deep link after connection (full transaction signing coming next)
+        window.location.href = payUrl;
       } catch (err) {
+        console.error(err);
         window.open(payUrl, '_blank');
       }
     };
@@ -250,9 +253,6 @@ async function showPaymentScreen(order) {
     paylink.innerText = "Open Phantom Wallet";
     paylink.href = payUrl;
   }
-
-  document.getElementById("qr").src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(payUrl)}`;
-  document.getElementById("payment").style.display = "block";
 
   pollForPayment(order.id);
 }
