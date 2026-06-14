@@ -217,12 +217,38 @@ let selectedPackage = null;
 let selectedToken = null;
 let currentOrderId = null;
 
-// Token mint addresses on Solana
+// Token mint addresses
 const TOKEN_MINTS = {
-  SOL: null,           // Native SOL uses null
+  SOL: null,
   USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
   USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
 };
+
+function selectPackage(btn) {
+  selectedPackage = 'one';
+  document.querySelectorAll('.package').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById("form").style.display = "block";
+}
+
+function selectToken(token, btn) {
+  selectedToken = token;
+  document.querySelectorAll('.token-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function showDisclaimerModal() {
+  const debug = document.getElementById("debug");
+  debug.innerText = "";
+  if (!selectedPackage) return debug.innerText = "Please select a package.";
+  if (!selectedToken) return debug.innerText = "Please select a payment token.";
+  document.getElementById("disclaimerModal").style.display = "flex";
+}
+
+function acceptDisclaimer() {
+  document.getElementById("disclaimerModal").style.display = "none";
+  createOrder();
+}
 
 async function createOrder() {
   const debug = document.getElementById("debug");
@@ -240,7 +266,7 @@ async function createOrder() {
   if (!selectedToken) return debug.innerText = "Please select a payment token.";
 
   try {
-    debug.innerText = "Creating order...";
+    debug.innerText = "Creating order in Supabase...";
 
     const orderData = {
       name,
@@ -264,21 +290,20 @@ async function createOrder() {
       body: JSON.stringify(orderData)
     });
 
-    const order = await res.json();
-    if (!res.ok || !order[0]?.id) throw new Error("Failed to create order");
+    const data = await res.json();
+    if (!res.ok || !data || !data[0]) throw new Error("Failed to create order");
 
-    currentOrderId = order[0].id;
-    debug.innerText = "Order created! Preparing payment...";
+    currentOrderId = data[0].id;
+    debug.innerText = "Order created successfully!";
 
-    await showPaymentScreen(order[0]);
+    await showPaymentScreen(data[0]);
   } catch (err) {
-    debug.innerText = "Error: " + err.message;
+    debug.innerText = "Error creating order: " + err.message;
     console.error(err);
   }
 }
 
 async function showPaymentScreen(order) {
-  const amount = 188;
   let payUrl = "";
 
   if (selectedToken === "SOL") {
@@ -288,19 +313,16 @@ async function showPaymentScreen(order) {
     payUrl = `solana:${WALLET_ADDRESS}?amount=188&spl-token=${mint}&label=Melatonin%20M%C3%A9lange&message=Order%20${order.id}`;
   }
 
-  // Update UI
-  document.getElementById("amount").innerHTML = `Send exactly <strong>$${amount} ${selectedToken}</strong>`;
+  document.getElementById("amount").innerHTML = `Send exactly <strong>$188 ${selectedToken}</strong> to complete your order`;
 
   const paylink = document.getElementById("paylink");
   paylink.href = payUrl;
   paylink.innerText = "Open in Phantom Wallet";
 
-  // QR Code
   document.getElementById("qr").src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(payUrl)}`;
 
   document.getElementById("payment").style.display = "block";
 
-  // Start polling
   pollForPayment(order.id);
 }
 
@@ -309,7 +331,7 @@ function pollForPayment(orderId) {
   const interval = setInterval(async () => {
     attempts++;
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${orderId}&select=status,tx_hash`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${orderId}&select=status`, {
         headers: {
           "apikey": SUPABASE_ANON_KEY,
           "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
@@ -317,21 +339,15 @@ function pollForPayment(orderId) {
       });
       const data = await res.json();
 
-      if (data[0]?.status === "paid") {
-        document.getElementById("status").innerHTML = `✅ <strong>Payment Confirmed!</strong><br>Thank you. We'll ship soon.`;
+      if (data && data[0] && data[0].status === "paid") {
+        document.getElementById("status").innerHTML = `✅ <strong>Payment Confirmed!</strong><br>Thank you. Your order will ship soon.`;
         clearInterval(interval);
       } else {
         document.getElementById("status").innerText = `Waiting for payment... (${attempts})`;
       }
     } catch (e) {
-      console.log("Polling error", e);
+      console.log("Polling error");
     }
-  }, 8000); // Check every 8 seconds
+  }, 8000);
 }
-
-// Keep your existing functions
-function selectPackage(btn) { /* unchanged */ }
-function selectToken(token, btn) { /* unchanged */ }
-function showDisclaimerModal() { /* unchanged */ }
-function acceptDisclaimer() { /* unchanged */ }
 </script>
