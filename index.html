@@ -82,7 +82,7 @@ h1 { font-size: 42px; line-height: 0.95; color: #38bdf8; text-shadow: 0 0 12px #
 
     <div id="payment" style="display:none; margin-top:20px;">
       <h3 id="amount"></h3>
-      <a id="paylink" class="continue" style="display:block; text-align:center; text-decoration:none; margin-bottom:12px;">Open in Phantom Wallet</a>
+      <a id="paylink" class="continue" style="display:block; text-align:center; text-decoration:none; margin-bottom:12px;">Pay with Phantom</a>
       <img id="qr" style="width:260px; max-width:100%; margin:22px auto; display:block; background:white; padding:12px; border-radius:18px;">
       <p id="status" style="text-align:center;">Waiting for payment...</p>
     </div>
@@ -110,8 +110,9 @@ h1 { font-size: 42px; line-height: 0.95; color: #38bdf8; text-shadow: 0 0 12px #
   </div>
 </div>
 
+<script src="https://unpkg.com/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
 <script>
-// ==================== STABLE SOLANA PAY VERSION ====================
+// ==================== STABLE + DIRECT PHANTOM DESKTOP ====================
 const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
 const SUPABASE_URL = 'https://aeqhjftkaikfquafwwdm.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlcWhqZnRrYWlrZnF1YWZ3d2RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1ODMzMjMsImV4cCI6MjA5MzE1OTMyM30.jKE8LX8-uuYCWiJ6WaeAjXFU0FcWK1n7Q9X6axBId98';
@@ -137,12 +138,7 @@ async function getTokenAmount(token) {
 }
 
 function getPhantomProvider() {
-  if ("phantom" in window) {
-    const provider = window.phantom?.solana;
-    if (provider?.isPhantom) return provider;
-  }
-  if (window.solana?.isPhantom) return window.solana;
-  return null;
+  return window?.phantom?.solana?.isPhantom ? window.phantom.solana : (window.solana?.isPhantom ? window.solana : null);
 }
 
 function selectPackage(btn) {
@@ -235,15 +231,61 @@ async function showPaymentScreen(order) {
 
   if (provider) {
     paylink.innerText = "Pay with Phantom Extension";
+    paylink.onclick = async (e) => {
+      e.preventDefault();
+      await handlePhantomTransaction(order, tokenAmount, payUrl);
+    };
   } else {
     paylink.innerText = "Open Phantom Wallet";
+    paylink.href = payUrl;
   }
-  paylink.href = payUrl;
 
   document.getElementById("qr").src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(payUrl)}`;
   document.getElementById("payment").style.display = "block";
 
   pollForPayment(order.id);
+}
+
+async function handlePhantomTransaction(order, tokenAmount, payUrl) {
+  const provider = getPhantomProvider();
+  if (!provider) return window.open(payUrl, '_blank');
+
+  try {
+    await provider.connect();
+    const web3 = window.solanaWeb3;
+    const conn = new web3.Connection('https://api.mainnet-beta.solana.com');
+    const fromPubkey = (await provider.connect()).publicKey;
+    const toPubkey = new web3.PublicKey(WALLET_ADDRESS);
+
+    let tx = new web3.Transaction();
+
+    if (selectedToken === "SOL") {
+      const lamports = Math.round(parseFloat(tokenAmount) * web3.LAMPORTS_PER_SOL);
+      tx.add(web3.SystemProgram.transfer({
+        fromPubkey: fromPubkey,
+        toPubkey: toPubkey,
+        lamports: lamports
+      }));
+    } else {
+      // Simple fallback for SPL tokens (full ATA handling can be added later)
+      alert("USDC/USDT direct transfer coming soon. Using Solana Pay link for now.");
+      window.open(payUrl, '_blank');
+      return;
+    }
+
+    tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+    tx.feePayer = fromPubkey;
+
+    const { signature } = await provider.signAndSendTransaction(tx);
+    console.log("Transaction sent:", signature);
+
+    // Update order with signature if needed (optional)
+    document.getElementById("status").innerHTML = `✅ Transaction sent! Signature: ${signature.substring(0, 12)}...`;
+
+  } catch (err) {
+    console.error(err);
+    window.open(payUrl, '_blank'); // fallback
+  }
 }
 
 function pollForPayment(orderId) {
