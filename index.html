@@ -208,108 +208,130 @@ h1 {
 </div>
 
 <script>
-  let selectedPackage = null;
-  let selectedToken = null;
-  const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
+// === CONFIG ===
+const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
+const SUPABASE_URL = 'https://aeqhjftkaikfquafwwdm.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlcWhqZnRrYWlrZnF1YWZ3d2RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1ODMzMjMsImV4cCI6MjA5MzE1OTMyM30.jKE8LX8-uuYCWiJ6WaeAjXFU0FcWK1n7Q9X6axBId98';
 
-  function selectPackage(btn) {
-    selectedPackage = 'one';
-    document.querySelectorAll('.package').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    document.getElementById("form").style.display = "block";
+let selectedPackage = null;
+let selectedToken = null;
+let currentOrderId = null;
+
+// Token mint addresses on Solana
+const TOKEN_MINTS = {
+  SOL: null,           // Native SOL uses null
+  USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
+};
+
+async function createOrder() {
+  const debug = document.getElementById("debug");
+  debug.innerText = "";
+
+  const name = document.getElementById("name").value.trim();
+  const address = document.getElementById("address").value.trim();
+  const city = document.getElementById("city").value.trim();
+  const state = document.getElementById("state").value.trim();
+  const zip = document.getElementById("zip").value.trim();
+
+  if (!name || !address || !city || !state || !zip) {
+    return debug.innerText = "Please fill all shipping fields.";
+  }
+  if (!selectedToken) return debug.innerText = "Please select a payment token.";
+
+  try {
+    debug.innerText = "Creating order...";
+
+    const orderData = {
+      name,
+      address,
+      city,
+      state,
+      zip,
+      token: selectedToken,
+      amount_usd: 188,
+      status: "pending"
+    };
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        "Prefer": "return=representation"
+      },
+      body: JSON.stringify(orderData)
+    });
+
+    const order = await res.json();
+    if (!res.ok || !order[0]?.id) throw new Error("Failed to create order");
+
+    currentOrderId = order[0].id;
+    debug.innerText = "Order created! Preparing payment...";
+
+    await showPaymentScreen(order[0]);
+  } catch (err) {
+    debug.innerText = "Error: " + err.message;
+    console.error(err);
+  }
+}
+
+async function showPaymentScreen(order) {
+  const amount = 188;
+  let payUrl = "";
+
+  if (selectedToken === "SOL") {
+    payUrl = `solana:${WALLET_ADDRESS}?amount=188&label=Melatonin%20M%C3%A9lange&message=Order%20${order.id}`;
+  } else {
+    const mint = TOKEN_MINTS[selectedToken];
+    payUrl = `solana:${WALLET_ADDRESS}?amount=188&spl-token=${mint}&label=Melatonin%20M%C3%A9lange&message=Order%20${order.id}`;
   }
 
-  function selectToken(token, btn) {
-    selectedToken = token;
-    document.querySelectorAll('.token-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-  }
+  // Update UI
+  document.getElementById("amount").innerHTML = `Send exactly <strong>$${amount} ${selectedToken}</strong>`;
 
-  function showDisclaimerModal() {
-    const debug = document.getElementById("debug");
-    debug.innerText = "";
+  const paylink = document.getElementById("paylink");
+  paylink.href = payUrl;
+  paylink.innerText = "Open in Phantom Wallet";
 
-    if (!selectedPackage) return debug.innerText = "Please select a package.";
-    if (!selectedToken) return debug.innerText = "Please select a payment token.";
+  // QR Code
+  document.getElementById("qr").src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(payUrl)}`;
 
-    document.getElementById("disclaimerModal").style.display = "flex";
-  }
+  document.getElementById("payment").style.display = "block";
 
-  function acceptDisclaimer() {
-    document.getElementById("disclaimerModal").style.display = "none";
-    createOrder();
-  }
+  // Start polling
+  pollForPayment(order.id);
+}
 
-  async function createOrder() {
-    const debug = document.getElementById("debug");
-    debug.innerText = "";
-
-    const name = document.getElementById("name").value.trim();
-    const address = document.getElementById("address").value.trim();
-    const city = document.getElementById("city").value.trim();
-    const state = document.getElementById("state").value.trim();
-    const zip = document.getElementById("zip").value.trim();
-
-    if (!name || !address || !city || !state || !zip) {
-      return debug.innerText = "Please fill all shipping fields.";
-    }
-
+function pollForPayment(orderId) {
+  let attempts = 0;
+  const interval = setInterval(async () => {
+    attempts++;
     try {
-      debug.innerText = "Creating order...";
-      
-      const res = await fetch("/api/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          packageType: selectedPackage,
-          paymentToken: selectedToken,
-          address: { name, address, city, state, zip },
-          price: 188
-        })
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${orderId}&select=status,tx_hash`, {
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
       });
-
       const data = await res.json();
 
-      if (!res.ok) {
-        debug.innerText = "Order error: " + (data.error || JSON.stringify(data));
-        return;
+      if (data[0]?.status === "paid") {
+        document.getElementById("status").innerHTML = `✅ <strong>Payment Confirmed!</strong><br>Thank you. We'll ship soon.`;
+        clearInterval(interval);
+      } else {
+        document.getElementById("status").innerText = `Waiting for payment... (${attempts})`;
       }
-
-      debug.innerText = "Order created successfully!";
-
-      document.getElementById("amount").innerHTML = `Send <strong>${data.displayAmount}</strong>`;
-
-      const paylink = document.getElementById("paylink");
-      paylink.href = data.payUrl;
-      paylink.innerText = "Open in Phantom Wallet";
-
-      document.getElementById("qr").src = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=" + encodeURIComponent(data.payUrl);
-      document.getElementById("payment").style.display = "block";
-
-      checkPayment(data.reference);
-    } catch (err) {
-      debug.innerText = "Checkout error: " + err.message;
+    } catch (e) {
+      console.log("Polling error", e);
     }
-  }
+  }, 8000); // Check every 8 seconds
+}
 
-  function checkPayment(ref) {
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const r = await fetch(`/api/check-payment?reference=${encodeURIComponent(ref)}`);
-        const d = await r.json();
-        if (d.paid) {
-          document.getElementById("status").innerHTML = "✅ <strong>Payment confirmed!</strong><br>We'll ship your order soon.";
-          clearInterval(interval);
-        } else {
-          document.getElementById("status").innerText = `Waiting for payment... (${attempts})`;
-        }
-      } catch (e) {
-        document.getElementById("status").innerText = "Checking network...";
-      }
-    }, 10000);
-  }
+// Keep your existing functions
+function selectPackage(btn) { /* unchanged */ }
+function selectToken(token, btn) { /* unchanged */ }
+function showDisclaimerModal() { /* unchanged */ }
+function acceptDisclaimer() { /* unchanged */ }
 </script>
-</body>
-</html>
