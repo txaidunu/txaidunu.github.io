@@ -9,7 +9,7 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
 
 const PRICES = {
-  one: 188   // Change back to real price when ready
+  one: 1   // ← Test price
 };
 
 async function getSolPrice() {
@@ -54,11 +54,10 @@ module.exports = async function handler(req, res) {
 
     const solPrice = await getSolPrice();
     const tokenAmount = (usdAmount / solPrice).toFixed(6);
-    const displayAmount = `${tokenAmount} SOL (~$${usdAmount})`;
+    const displayAmount = `${tokenAmount} SOL ($${usdAmount} TEST)`;
 
     const payUrl = `solana:${WALLET_ADDRESS}?amount=${tokenAmount}&label=Melatonin%20M%C3%A9lange&memo=${encodeURIComponent(reference)}`;
 
-    // Save to Supabase
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     await supabase.from('orders').insert([{
       reference,
@@ -74,17 +73,14 @@ module.exports = async function handler(req, res) {
       status: 'pending'
     }]);
 
-    // Full Detailed Telegram Message
     const message = 
-      `🛎️ <b>NEW ORDER RECEIVED!</b>\n\n` +
-      `📦 <b>Package:</b> Founder's Batch (28 servings)\n` +
-      `💰 <b>Amount:</b> ${displayAmount}\n\n` +
-      `👤 <b>Name:</b> ${address.name}\n` +
-      `📍 <b>Street:</b> ${address.address}\n` +
-      `🏙️ <b>City:</b> ${address.city}\n` +
-      `📍 <b>State/ZIP:</b> ${address.state} ${address.zip}\n\n` +
-      `🔑 <b>Order ID:</b> <code>${reference}</code>\n` +
-      `⏳ <b>Status:</b> Waiting for payment`;
+      `🛎️ <b>NEW TEST ORDER RECEIVED!</b>\n\n` +
+      `📦 Package: Founder's Batch (28 servings)\n` +
+      `💰 Amount: ${displayAmount}\n` +
+      `👤 Name: ${address.name}\n` +
+      `📍 ${address.address}\n` +
+      `🏙️ ${address.city}, ${address.state} ${address.zip}\n` +
+      `🔑 Order ID: <code>${reference}</code>`;
 
     await sendTelegram(message);
 
