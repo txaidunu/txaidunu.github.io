@@ -166,53 +166,49 @@ function showDisclaimerModal() {
 
 function acceptDisclaimer() {
   document.getElementById("disclaimerModal").style.display = "none";
-  createOrder();
-}
-
 async function createOrder() {
-  const debug = document.getElementById("debug");
-  debug.innerText = "Creating order...";
+  const debug = document.getElementById('debug');
+  debug.innerText = "";
 
-  const name = document.getElementById("name").value.trim();
-  const street = document.getElementById("address").value.trim();
-  const city = document.getElementById("city").value.trim();
-  const state = document.getElementById("state").value.trim();
-  const zip = document.getElementById("zip").value.trim();
+  const name = document.getElementById('name').value.trim();
+  const address = document.getElementById('address').value.trim();
+  const city = document.getElementById('city').value.trim();
+  const state = document.getElementById('state').value.trim();
+  const zip = document.getElementById('zip').value.trim();
 
-  if (!name || !street || !city || !state || !zip) {
+  if (!name || !address || !city || !state || !zip) {
     return debug.innerText = "Please fill all shipping fields.";
   }
 
   try {
-    const orderData = {
-      customer_name: name,
-      street: street,
-      city: city,
-      state: state,
-      zip: zip,
-      payment_token: selectedToken,
-      usd_amount: 188,
-      status: "pending"
-    };
+    debug.innerText = "Creating order...";
 
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+    const res = await fetch("/api/create-order", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-        "Prefer": "return=representation"
-      },
-      body: JSON.stringify(orderData)
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        packageType: "one",
+        paymentToken: "SOL",
+        address: { name, address, city, state, zip }
+      })
     });
 
     const data = await res.json();
-    if (!res.ok || !data || !data[0]) throw new Error("Failed to create order");
 
-    debug.innerText = "Order created successfully!";
-    await showPaymentScreen(data[0]);
+    if (!res.ok) {
+      debug.innerText = "Order error: " + (data.error || "Unknown error");
+      return;
+    }
+
+    debug.innerText = "✅ Order created successfully!";
+
+    // Show payment UI
+    document.getElementById('amount').innerHTML = `Send exactly <strong>${data.displayAmount}</strong>`;
+    document.getElementById('qr').src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(data.payUrl)}`;
+    document.getElementById('payment').style.display = 'block';
+
   } catch (err) {
-    debug.innerText = "Error: " + err.message;
+    debug.innerText = "Checkout error: " + err.message;
   }
 }
 
