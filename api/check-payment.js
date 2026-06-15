@@ -21,9 +21,7 @@ async function sendTelegram(message) {
         parse_mode: 'HTML'
       })
     });
-  } catch (err) {
-    console.error('Telegram error:', err);
-  }
+  } catch (err) {}
 }
 
 async function checkSolanaPayment(reference) {
@@ -48,7 +46,6 @@ async function checkSolanaPayment(reference) {
     }
     return { paid: false };
   } catch (err) {
-    console.error('Solana RPC error:', err);
     return { paid: false };
   }
 }
@@ -91,15 +88,15 @@ module.exports = async function handler(req, res) {
 
       if (existingOrder) {
         const message = 
-          `🚀 <b>PAYMENT CONFIRMED!</b>\n\n` +
-          `📦 <b>Package:</b> Founder's Batch\n` +
+          `✅ <b>PAYMENT RECEIVED!</b>\n\n` +
+          `📦 <b>Package:</b> Founder's Batch (28 servings)\n` +
           `💰 <b>Amount:</b> ${existingOrder.token_amount} ${existingOrder.payment_token}\n` +
           `👤 <b>Name:</b> ${existingOrder.customer_name}\n` +
           `📍 <b>Address:</b> ${existingOrder.street}\n` +
           `🏙️ <b>Location:</b> ${existingOrder.city}, ${existingOrder.state} ${existingOrder.zip}\n` +
           `🔑 <b>Order ID:</b> <code>${reference}</code>\n` +
-          `🔗 <b>Tx:</b> <code>${payment.signature}</code>\n\n` +
-          `✅ Ready for shipping!`;
+          `🔗 <b>Transaction:</b> <code>${payment.signature}</code>\n\n` +
+          `🚀 Thank you! Order is ready for shipping.`;
 
         await sendTelegram(message);
       }
