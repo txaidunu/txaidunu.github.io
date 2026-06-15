@@ -3,13 +3,13 @@ const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;        // Your token: 8405157983:AAEUGnnvnrPMNq6pnfvmIFpXfyxgwGvqY_M
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;            // Your chat ID: 1519466250
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
 
 const PRICES = {
-  one: 1   // Test price ($1)
+  one: 1   // Test price - change back to 188 when ready
 };
 
 async function getSolPrice() {
@@ -18,13 +18,13 @@ async function getSolPrice() {
     const data = await res.json();
     return data.data.SOL.price;
   } catch (err) {
-    return 145;
+    return 145; // fallback
   }
 }
 
 async function sendTelegram(message) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    console.error("Telegram config missing");
+    console.error("Telegram credentials missing");
     return;
   }
   try {
@@ -39,7 +39,7 @@ async function sendTelegram(message) {
       })
     });
   } catch (err) {
-    console.error('Telegram failed:', err.message);
+    console.error('Telegram error:', err);
   }
 }
 
@@ -54,7 +54,10 @@ module.exports = async function handler(req, res) {
   try {
     const { packageType, paymentToken = 'SOL', address } = req.body;
 
-    if (!packageType || !PRICES[packageType]) return res.status(400).json({ error: 'Invalid package' });
+    if (!packageType || !PRICES[packageType]) {
+      return res.status(400).json({ error: 'Invalid package' });
+    }
+
     if (!address?.name || !address?.address || !address?.city || !address?.state || !address?.zip) {
       return res.status(400).json({ error: 'Missing shipping info' });
     }
@@ -66,9 +69,9 @@ module.exports = async function handler(req, res) {
     const tokenAmount = (usdAmount / solPrice).toFixed(6);
     const displayAmount = `${tokenAmount} SOL ($${usdAmount} test)`;
 
-    const payUrl = `solana:${WALLET_ADDRESS}?amount=${tokenAmount}&label=Melatonin%20M%C3%A9lange&memo=${encodeURIComponent(reference)}`;
+    const payUrl = `solana:\( {WALLET_ADDRESS}?amount= \){tokenAmount}&label=Melatonin%20M%C3%A9lange&memo=${encodeURIComponent(reference)}`;
 
-    // Save order to Supabase
+    // Save to Supabase
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     await supabase.from('orders').insert([{
       reference,
@@ -84,15 +87,16 @@ module.exports = async function handler(req, res) {
       status: 'pending'
     }]);
 
-    // Send Telegram Alert
+    // Detailed Telegram Alert
     const message = 
       `🛎️ <b>NEW ORDER RECEIVED!</b>\n\n` +
-      `📦 Package: Founder's Batch (28 servings)\n` +
-      `💰 Amount: ${displayAmount}\n` +
-      `👤 Name: ${address.name}\n` +
-      `📍 Address: ${address.address}\n` +
-      `🏙️ Location: ${address.city}, ${address.state} ${address.zip}\n` +
-      `🔑 Order ID: <code>${reference}</code>`;
+      `📦 <b>Package:</b> Founder's Batch (28 servings)\n` +
+      `💰 <b>Amount:</b> ${displayAmount}\n` +
+      `👤 <b>Name:</b> ${address.name}\n` +
+      `📍 <b>Address:</b> ${address.address}\n` +
+      `🏙️ <b>Location:</b> ${address.city}, ${address.state} ${address.zip}\n` +
+      `🔑 <b>Order ID:</b> <code>${reference}</code>\n` +
+      `⏳ Status: Waiting for payment`;
 
     await sendTelegram(message);
 
@@ -105,6 +109,6 @@ module.exports = async function handler(req, res) {
 
   } catch (err) {
     console.error('Create order error:', err);
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: 'Server error: ' + err.message });
   }
 };
