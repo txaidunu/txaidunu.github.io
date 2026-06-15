@@ -75,7 +75,7 @@ input { width: 100%; padding: 12px; margin: 6px 0; background: rgba(2,6,23,0.8);
 
     <div id="payment" style="display:none; margin-top:20px;">
       <h3 id="amount"></h3>
-      <a id="paylink" class="continue" style="display:block; text-align:center; text-decoration:none; margin-bottom:12px;">Pay with Phantom</a>
+      <a id="paylink" class="continue" style="display:block; text-align:center; text-decoration:none; margin-bottom:12px;">Open in Phantom Wallet</a>
       <img id="qr" style="width:260px; max-width:100%; margin:22px auto; display:block; background:white; padding:12px; border-radius:18px;">
       <p id="status" style="text-align:center;">Waiting for payment...</p>
     </div>
@@ -166,6 +166,11 @@ async function createOrder() {
 
     document.getElementById('amount').innerHTML = `Send exactly <strong>${data.displayAmount}</strong>`;
     document.getElementById('qr').src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(data.payUrl)}`;
+    
+    const paylink = document.getElementById('paylink');
+    paylink.href = data.payUrl;
+    paylink.innerText = "Open in Phantom Wallet";
+    
     document.getElementById('payment').style.display = 'block';
 
   } catch (err) {
