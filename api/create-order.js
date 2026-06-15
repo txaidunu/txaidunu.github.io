@@ -6,34 +6,15 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-console.log("🔧 Telegram Config Check:", {
-  hasToken: !!TELEGRAM_BOT_TOKEN,
-  hasChatId: !!TELEGRAM_CHAT_ID,
-  chatId: TELEGRAM_CHAT_ID ? TELEGRAM_CHAT_ID.substring(0,4) + "..." : null
-});
-
 const WALLET_ADDRESS = 'H115kTVj5QsT58w6Xg9hviyoALWqVZ1DLTvhVDeQ66w4';
 
 const PRICES = { one: 1 };
 
-async function getSolPrice() {
-  try {
-    const res = await fetch('https://price.jup.ag/v6/price?ids=SOL');
-    const data = await res.json();
-    return data.data.SOL.price;
-  } catch {
-    return 145;
-  }
-}
-
 async function sendTelegram(message) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    console.error("❌ Telegram credentials missing in Vercel");
-    return;
-  }
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    const response = await fetch(url, {
+    await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -42,35 +23,47 @@ async function sendTelegram(message) {
         parse_mode: 'HTML'
       })
     });
-    const data = await response.json();
-    console.log("📨 Telegram API Response:", data);
-  } catch (err) {
-    console.error("❌ Telegram send failed:", err.message);
-  }
+  } catch (e) {}
 }
 
 module.exports = async function handler(req, res) {
-  // ... (CORS and validation same as before)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { packageType = 'one', paymentToken = 'SOL', address } = req.body;
+    const { packageType = 'one', address } = req.body;
 
     const usdAmount = PRICES[packageType];
-    const reference = 'MM-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const reference = 'MM-' + Date.now();
 
-    const solPrice = await getSolPrice();
+    const solPrice = 145; // temporary fixed price for testing
     const tokenAmount = (usdAmount / solPrice).toFixed(6);
-    const displayAmount = `${tokenAmount} SOL ($${usdAmount} test)`;
+    const displayAmount = `${tokenAmount} SOL (\[ {usdAmount} test)`;
 
     const payUrl = `solana:\( {WALLET_ADDRESS}?amount= \){tokenAmount}&label=Melatonin%20M%C3%A9lange&memo=${encodeURIComponent(reference)}`;
 
+    // Save order
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    await supabase.from('orders').insert([{ ... }]);   // your insert code
+    await supabase.from('orders').insert([{
+      reference,
+      package_type: 'founders-batch-28',
+      usd_amount: usdAmount,
+      token_amount: tokenAmount,
+      payment_token: 'SOL',
+      customer_name: address.name,
+      street: address.address,
+      city: address.city,
+      state: address.state,
+      zip: address.zip,
+      status: 'pending'
+    }]);
 
-    const message = `🛎️ <b>NEW TEST ORDER</b>\nAmount: ${displayAmount}\nName: ${address.name}\nOrder ID: ${reference}`;
+    // Telegram Alert
+    const message = `🛎️ <b>NEW ORDER!</b>\n\n💰 \]{usdAmount}\n👤 ${address.name}\n📍 ${address.city}, ${address.state}\n🔑 ${reference}`;
 
     await sendTelegram(message);
 
@@ -78,6 +71,6 @@ module.exports = async function handler(req, res) {
 
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Server error' });
   }
 };
